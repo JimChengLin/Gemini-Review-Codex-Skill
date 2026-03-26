@@ -66,23 +66,14 @@ run_with_timeout() {
   shift
   local err_file="$1"
   shift
-  local use_group_kill=0
   local max_ticks
   max_ticks="$(calc_max_ticks "$sec")"
   local heartbeat_ticks
   heartbeat_ticks="$(calc_max_ticks "$PROGRESS_HEARTBEAT_SEC")"
   local ticks=0
 
-  if command -v perl >/dev/null 2>&1; then
-    # Start command in a dedicated process group for reliable timeout cleanup.
-    perl -e 'setpgrp(0,0) or die "setpgrp failed: $!"; exec @ARGV' "$@" >"$out_file" 2>"$err_file" &
-    use_group_kill=1
-  elif command -v setsid >/dev/null 2>&1; then
-    setsid "$@" >"$out_file" 2>"$err_file" &
-    use_group_kill=1
-  else
-    "$@" >"$out_file" 2>"$err_file" &
-  fi
+  # Start command in a dedicated process group for reliable timeout cleanup.
+  perl -e 'setpgrp(0,0) or die "setpgrp failed: $!"; exec @ARGV' "$@" >"$out_file" 2>"$err_file" &
   local pid=$!
   echo "[gemini-second-opinion] waiting for Gemini response (timeout ${sec}s)" >&2
 
@@ -93,15 +84,9 @@ run_with_timeout() {
       echo "[gemini-second-opinion] still running (${elapsed_sec}s elapsed / ${sec}s timeout)" >&2
     fi
     if (( ticks >= max_ticks )); then
-      if (( use_group_kill )); then
-        kill -TERM -- "-$pid" 2>/dev/null || true
-      fi
-      kill "$pid" 2>/dev/null || true
+      kill -TERM -- "-$pid" 2>/dev/null || true
       wait_tick
-      if (( use_group_kill )); then
-        kill -KILL -- "-$pid" 2>/dev/null || true
-      fi
-      kill -9 "$pid" 2>/dev/null || true
+      kill -KILL -- "-$pid" 2>/dev/null || true
       wait "$pid" 2>/dev/null || true
       return 124
     fi
