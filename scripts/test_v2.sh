@@ -216,6 +216,9 @@ if grep -q "Workflow (v3-lean)" "$SKILL_FILE" && \
   grep -qi '`workdir`' "$SKILL_FILE" && \
   grep -qi "Do not rely on .*symlink" "$SKILL_FILE" && \
   grep -q "Do not paste large file contents" "$SKILL_FILE" && \
+  grep -q 'Never write a bare `Reject` line without a source.' "$SKILL_FILE" && \
+  grep -q 'write `Reject: none`' "$SKILL_FILE" && \
+  grep -q 'per-item `source` tags' "$SKILL_FILE" && \
   grep -q 'After each cycle, clean `/tmp/so_t\*`, `/tmp/gso_\*`, and `.tmp_skill_review`.' "$SKILL_FILE" && \
   ! grep -qi "subagent" "$SKILL_FILE" && \
   ! grep -q "spawn_agent" "$SKILL_FILE" && \

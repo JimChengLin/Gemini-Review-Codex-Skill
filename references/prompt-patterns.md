@@ -49,4 +49,12 @@ Context packet checklist:
 
 ## Synthesis Rule
 
-Treat Gemini output as advisory input, not final authority. Integrate by tagging each point as `Adopt`, `Investigate`, or `Reject` with one-line reasoning.
+Treat Gemini output as advisory input, not final authority. Integrate by tagging each point as `Adopt`, `Investigate`, or `Reject` with one-line reasoning plus explicit source attribution.
+
+Use this compact format:
+
+- `Adopt (source: <Gemini/Codex>)`: ...
+- `Investigate (source: <Gemini/Codex>)`: ...
+- `Reject (source: <Gemini/Codex/inferred>)`: ...
+
+If no concrete option should be rejected, write `Reject: none`.

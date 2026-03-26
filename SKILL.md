@@ -103,11 +103,20 @@ Classify Gemini feedback into:
 - `Investigate`: plausible but unproven; verify quickly.
 - `Reject`: conflicts with constraints or evidence.
 
+For each `Merged Decision` entry, include explicit source attribution so no item appears out of nowhere:
+
+- `source: Gemini recommendation` when directly from `recommendation` or `risks`.
+- `source: Gemini strongest_counterargument` when coming from counterargument path.
+- `source: Codex analysis` when from your independent review.
+- If inferred (not explicitly proposed), mark it as inferred, e.g. `source: Codex inferred alternative`.
+
+Never write a bare `Reject` line without a source. If there is no concrete option to reject, write `Reject: none`.
+
 Always present conclusions in this order:
 
 1. `Codex View`: your own independent analysis.
 2. `Gemini View`: key points from second opinion.
-3. `Merged Decision`: final decision with `Adopt/Investigate/Reject` mapping.
+3. `Merged Decision`: final decision with `Adopt/Investigate/Reject` mapping and per-item `source` tags.
 
 ### 5) Cleanup
 
