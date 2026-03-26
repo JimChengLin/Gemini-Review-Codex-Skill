@@ -58,7 +58,7 @@ v3-lean controls:
 
 - Default model: `gemini-3-pro-preview`
 - Override model: `GEMINI_SECOND_OPINION_MODEL`
-- Timeout seconds: `GEMINI_SECOND_OPINION_TIMEOUT_SEC` (default `180`)
+- Timeout seconds: `GEMINI_SECOND_OPINION_TIMEOUT_SEC` (default `300`)
 - Max context bytes: `GEMINI_SECOND_OPINION_MAX_CONTEXT_BYTES` (default `120000`)
 - Failure mode: `GEMINI_SECOND_OPINION_FAILURE_MODE` (`fail-open` or `fail-closed`, default `fail-open`)
 - Gemini command override: `GEMINI_SECOND_OPINION_CMD` (default `gemini`)
