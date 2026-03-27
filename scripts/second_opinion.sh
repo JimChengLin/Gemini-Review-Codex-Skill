@@ -101,7 +101,7 @@ is_valid_opinion_json() {
   local file="$1"
   jq -e '
     type == "object" and
-    (.alternate_perspective | type == "string") and
+    (.assessment | type == "string") and
     (.risks | type == "array" and all(.[]; type == "string")) and
     (.strongest_counterargument | type == "string") and
     (.recommendation | type == "string") and
@@ -213,7 +213,8 @@ fi
 context_packet="$(cat "$context_tmp")"
 
 prompt="$(cat <<PROMPT
-You are an independent senior reviewer giving a second opinion.
+You are an independent senior reviewer.
+Evaluate the evidence directly and state disagreements clearly when warranted.
 Task type: ${task_type}
 Primary question: ${primary_question}
 
@@ -227,7 +228,7 @@ ${context_packet}
 === END_CONTEXT ===
 
 Return exactly one JSON object with these fields:
-- alternate_perspective: string
+- assessment: string
 - risks: array of strings
 - strongest_counterargument: string
 - recommendation: string

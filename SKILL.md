@@ -87,7 +87,7 @@ For Codex tool execution, prefer Gemini-related commands in non-sandbox mode (es
 - `model`: explicit override value when `GEMINI_SECOND_OPINION_MODEL` is set, otherwise `auto` (Gemini CLI chooses model)
 - `reason`, `message` (set on fallback)
 - `opinion` (only when status is `ok`), containing:
-  - `alternate_perspective` (string)
+  - `assessment` (string)
   - `risks` (array of strings)
   - `strongest_counterargument` (string)
   - `recommendation` (string)
