@@ -273,10 +273,7 @@ Never edit, create, delete, or move files.
 ${context_packet}
 === END_CONTEXT ===
 
-Return exactly one JSON object with these fields.
-Output raw JSON only.
-Do not wrap the JSON in markdown/code fences.
-Do not output any extra text before or after the JSON.
+Return one raw JSON object only (no markdown/code fences, no extra text) with these fields:
 - risks: array of strings
 - strongest_counterargument: string
 - recommendation: string
