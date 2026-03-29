@@ -109,6 +109,31 @@ JSON
 MOCK
 chmod +x "$mock_log_json"
 
+mock_stream="$(mktemp)"
+cat > "$mock_stream" <<'MOCK'
+#!/usr/bin/env bash
+cat <<'JSONL'
+{"type":"init","timestamp":"2026-03-29T10:00:00.000Z","session_id":"s1","model":"gemini-3-pro"}
+{"type":"message","timestamp":"2026-03-29T10:00:01.000Z","role":"assistant","content":"{\"risks\":[\"r-stream\"],","delta":true}
+{"type":"message","timestamp":"2026-03-29T10:00:02.000Z","role":"assistant","content":"\"strongest_counterargument\":\"c-stream\",\"recommendation\":\"from stream\",\"next_verification\":[\"v-stream\"]}","delta":true}
+{"type":"result","timestamp":"2026-03-29T10:00:03.000Z","status":"success","stats":{"total_tokens":10,"input_tokens":6,"output_tokens":4,"cached":0,"input":6,"duration_ms":1200,"tool_calls":0,"models":{"gemini-3-pro":{"total_tokens":10,"input_tokens":6,"output_tokens":4,"cached":0,"input":6}}}}
+JSONL
+MOCK
+chmod +x "$mock_stream"
+
+mock_check_args="$(mktemp)"
+cat > "$mock_check_args" <<'MOCK'
+#!/usr/bin/env bash
+if [[ " $* " != *" --output-format stream-json "* ]]; then
+  echo "missing stream-json output format" >&2
+  exit 3
+fi
+cat <<'JSON'
+{"risks":["r1"],"strongest_counterargument":"c","recommendation":"do x","next_verification":["v1"]}
+JSON
+MOCK
+chmod +x "$mock_check_args"
+
 mock_tree="$(mktemp)"
 cat > "$mock_tree" <<'MOCK'
 #!/usr/bin/env bash
@@ -179,13 +204,38 @@ else
   ng "brace-prefixed logs should not break parsing"
 fi
 
-# Test 9: timeout cleanup kills process group children
+# Test 9: stream-json event output is reconstructed correctly
+if GEMINI_SECOND_OPINION_CMD="$mock_stream" \
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t9_out.json 2>/tmp/so_t9_err.txt; then
+  if jq -e '.status=="ok" and .opinion.recommendation=="from stream" and .opinion.risks[0]=="r-stream"' /tmp/so_t9_out.json >/dev/null && \
+    grep -q '"type":"message"' /tmp/so_t9_err.txt; then
+    ok "stream-json parsing reconstructs assistant output and mirrors events"
+  else
+    ng "stream-json reconstruction or stderr mirroring mismatch"
+  fi
+else
+  ng "stream-json output should parse successfully"
+fi
+
+# Test 10: command includes stream-json output flag
+if GEMINI_SECOND_OPINION_CMD="$mock_check_args" \
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t10_out.json 2>/tmp/so_t10_err.txt; then
+  if jq -e '.status=="ok" and .opinion.recommendation=="do x"' /tmp/so_t10_out.json >/dev/null; then
+    ok "command includes --output-format stream-json"
+  else
+    ng "stream-json output flag payload mismatch"
+  fi
+else
+  ng "stream-json output flag should pass"
+fi
+
+# Test 11: timeout cleanup kills process group children
 child_pid_file="$(mktemp)"
 if GSO_CHILD_PID_FILE="$child_pid_file" \
   GEMINI_SECOND_OPINION_CMD="$mock_tree" \
   GEMINI_SECOND_OPINION_TIMEOUT_SEC=2 \
-  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t9_out.json 2>/tmp/so_t9_err.txt; then
-  if ! jq -e '.status=="fallback" and .reason=="gemini-timeout"' /tmp/so_t9_out.json >/dev/null; then
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t11_out.json 2>/tmp/so_t11_err.txt; then
+  if ! jq -e '.status=="fallback" and .reason=="gemini-timeout"' /tmp/so_t11_out.json >/dev/null; then
     ng "process-group cleanup timeout payload mismatch"
   elif [[ ! -s "$child_pid_file" ]]; then
     ng "process-group cleanup child pid file missing"
@@ -203,7 +253,7 @@ else
   ng "timeout cleanup probe should return zero in fail-open"
 fi
 
-# Test 10: docs reflect single-path workflow
+# Test 12: docs reflect single-path workflow
 if grep -q "^## Workflow$" "$SKILL_FILE" && \
   grep -q "second_opinion.sh" "$SKILL_FILE" && \
   grep -q "require_escalated" "$SKILL_FILE" && \
@@ -232,21 +282,21 @@ else
   ng "skill docs still contain removed subagent path"
 fi
 
-# Test 11: removed fallback async script
+# Test 13: removed fallback async script
 if [[ ! -e "$SCRIPT_DIR/parallel_review.sh" ]]; then
   ok "parallel_review.sh removed"
 else
   ng "parallel_review.sh should be removed"
 fi
 
-# Test 12: subagent wrapper removed
+# Test 14: subagent wrapper removed
 if [[ ! -e "$SCRIPT_DIR/subagent_second_opinion.sh" ]]; then
   ok "subagent_second_opinion.sh removed"
 else
   ng "subagent_second_opinion.sh should be removed"
 fi
 
-rm -f "$mock_ok" "$mock_slow" "$mock_bad_type" "$mock_log_json" "$mock_tree" "$child_pid_file"
+rm -f "$mock_ok" "$mock_slow" "$mock_bad_type" "$mock_log_json" "$mock_stream" "$mock_check_args" "$mock_tree" "$child_pid_file"
 
 if [[ "$fail" == "0" ]]; then
   echo "All tests passed: $pass"

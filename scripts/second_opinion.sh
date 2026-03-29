@@ -8,6 +8,7 @@ usage() {
 TICK_MS=200
 TICK_SLEEP_SEC=0.2
 PROGRESS_HEARTBEAT_SEC=30
+mirror_pid=""
 
 calc_max_ticks() {
   local sec="$1"
@@ -16,6 +17,14 @@ calc_max_ticks() {
 
 wait_tick() {
   sleep "$TICK_SLEEP_SEC"
+}
+
+stop_stream_mirror() {
+  if [[ -n "$mirror_pid" ]]; then
+    kill "$mirror_pid" 2>/dev/null || true
+    wait "$mirror_pid" 2>/dev/null || true
+    mirror_pid=""
+  fi
 }
 
 emit_json() {
@@ -75,6 +84,10 @@ run_with_timeout() {
   # Start command in a dedicated process group for reliable timeout cleanup.
   perl -e 'setpgrp(0,0) or die "setpgrp failed: $!"; exec @ARGV' "$@" >"$out_file" 2>"$err_file" &
   local pid=$!
+  # Keep stdout clean for final JSON payload while mirroring raw stream events to stderr.
+  tail -n +1 -f "$out_file" >&2 &
+  mirror_pid=$!
+
   echo "[gemini-second-opinion] waiting for Gemini response (timeout ${sec}s)" >&2
 
   while kill -0 "$pid" 2>/dev/null; do
@@ -88,6 +101,7 @@ run_with_timeout() {
       wait_tick
       kill -KILL -- "-$pid" 2>/dev/null || true
       wait "$pid" 2>/dev/null || true
+      stop_stream_mirror
       return 124
     fi
     wait_tick
@@ -95,6 +109,9 @@ run_with_timeout() {
   done
 
   wait "$pid"
+  local rc=$?
+  stop_stream_mirror
+  return "$rc"
 }
 
 is_valid_opinion_json() {
@@ -125,6 +142,34 @@ extract_valid_json_candidate() {
 
   rm -f "$candidate_file"
   return 1
+}
+
+extract_stream_assistant_text() {
+  local raw_file="$1"
+  local out_file="$2"
+
+  jq -erRn '
+    [inputs | fromjson? | select(type == "object")] as $events
+    | if (($events | length) > 0 and ($events | all(has("type")))) then
+        ($events
+          | map(select(.type == "message" and .role == "assistant" and (.content | type == "string")) | .content)
+          | join(""))
+      else
+        empty
+      end
+  ' <"$raw_file" >"$out_file"
+}
+
+extract_opinion_json() {
+  local source_file="$1"
+  local out_file="$2"
+
+  if is_valid_opinion_json "$source_file"; then
+    cp "$source_file" "$out_file"
+    return 0
+  fi
+
+  extract_valid_json_candidate "$source_file" "$out_file"
 }
 
 if [[ $# -lt 2 ]]; then
@@ -176,10 +221,12 @@ fi
 context_tmp="$(mktemp)"
 raw_tmp="$(mktemp)"
 err_tmp="$(mktemp)"
+stream_text_tmp="$(mktemp)"
 json_tmp="$(mktemp)"
 
 cleanup() {
-  rm -f "$context_tmp" "$raw_tmp" "$err_tmp" "$json_tmp"
+  stop_stream_mirror
+  rm -f "$context_tmp" "$raw_tmp" "$err_tmp" "$stream_text_tmp" "$json_tmp"
 }
 trap cleanup EXIT
 
@@ -234,7 +281,7 @@ Return exactly one JSON object with these fields:
 PROMPT
 )"
 
-gemini_args=(--extensions core)
+gemini_args=(--extensions core --output-format stream-json)
 if [[ -n "$model_override" ]]; then
   gemini_args+=(--model "$model_override")
 fi
@@ -259,9 +306,10 @@ if (( rc != 0 )); then
   handle_failure "gemini-failed" "$err_msg" 70
 fi
 
-if is_valid_opinion_json "$raw_tmp"; then
-  cp "$raw_tmp" "$json_tmp"
-elif ! extract_valid_json_candidate "$raw_tmp" "$json_tmp"; then
+if extract_stream_assistant_text "$raw_tmp" "$stream_text_tmp" && \
+  extract_opinion_json "$stream_text_tmp" "$json_tmp"; then
+  :
+elif ! extract_opinion_json "$raw_tmp" "$json_tmp"; then
   handle_failure "invalid-json" "Gemini output is not a valid opinion JSON" 70
 fi
 
