@@ -9,6 +9,9 @@ SKILL_FILE="$ROOT_DIR/SKILL.md"
 pass=0
 fail=0
 
+# Most tests verify non-sandbox behavior; Test 7 sets sandbox env explicitly.
+unset CODEX_SANDBOX_NETWORK_DISABLED 2>/dev/null || true
+
 ok() {
   echo "PASS: $1"
   pass=$((pass + 1))
@@ -91,17 +94,6 @@ JSON
 MOCK
 chmod +x "$mock_slow"
 
-mock_silent="$(mktemp)"
-cat > "$mock_silent" <<'MOCK'
-#!/usr/bin/env bash
-sleep 35
-cat <<'JSONL'
-{"type":"init","timestamp":"2026-03-30T10:00:00.000Z","session_id":"s-silent","model":"gemini-3-pro"}
-{"type":"message","timestamp":"2026-03-30T10:00:01.000Z","role":"assistant","content":"{\"risks\":[\"r1\"],\"strongest_counterargument\":\"c\",\"recommendation\":\"late output\",\"next_verification\":[\"v1\"]}","delta":true}
-{"type":"result","timestamp":"2026-03-30T10:00:02.000Z","status":"success"}
-JSONL
-MOCK
-chmod +x "$mock_silent"
 
 mock_bad_type="$(mktemp)"
 cat > "$mock_bad_type" <<'MOCK'
@@ -207,17 +199,18 @@ else
   ng "timeout in fail-open should return zero"
 fi
 
-# Test 7: first-output timeout fallback includes sandbox hint
-if GEMINI_SECOND_OPINION_CMD="$mock_silent" \
-  GEMINI_SECOND_OPINION_TIMEOUT_SEC=40 \
-  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t7_out.json 2>/tmp/so_t7_err.txt; then
-  if jq -e '.status=="fallback" and .reason=="gemini-first-output-timeout" and (.message | test("sandbox"; "i"))' /tmp/so_t7_out.json >/dev/null; then
-    ok "first-output timeout triggers with sandbox hint"
-  else
-    ng "first-output timeout payload mismatch"
-  fi
+# Test 7: sandbox env is detected and hard-fails with escalation hint
+if CODEX_SANDBOX_NETWORK_DISABLED=1 \
+  GEMINI_SECOND_OPINION_CMD="$mock_ok" \
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') >/tmp/so_t7_out.txt 2>/tmp/so_t7_err.txt; then
+  ng "sandbox detection should fail fast"
 else
-  ng "first-output timeout in fail-open should return zero"
+  rc=$?
+  if [[ "$rc" == "77" ]] && grep -q 'sandbox_permissions="require_escalated"' /tmp/so_t7_err.txt; then
+    ok "sandbox detection fails with escalation hint"
+  else
+    ng "sandbox detection code/message mismatch"
+  fi
 fi
 
 # Test 8: deep type validation for risks[]
@@ -348,7 +341,7 @@ else
   ng "subagent_second_opinion.sh should be removed"
 fi
 
-rm -f "$mock_ok" "$mock_slow" "$mock_silent" "$mock_bad_type" "$mock_log_json" "$mock_stream" "$mock_check_args" "$mock_raw_only" "$mock_tree" "$child_pid_file"
+rm -f "$mock_ok" "$mock_slow" "$mock_bad_type" "$mock_log_json" "$mock_stream" "$mock_check_args" "$mock_raw_only" "$mock_tree" "$child_pid_file"
 
 if [[ "$fail" == "0" ]]; then
   echo "All tests passed: $pass"
