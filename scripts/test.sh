@@ -9,8 +9,8 @@ SKILL_FILE="$ROOT_DIR/SKILL.md"
 pass=0
 fail=0
 
-# Most tests verify non-sandbox behavior; Test 7 sets sandbox env explicitly.
-unset CODEX_SANDBOX_NETWORK_DISABLED 2>/dev/null || true
+# Most tests verify non-sandbox behavior; sandbox-specific tests set env explicitly.
+unset CODEX_SANDBOX CODEX_SANDBOX_NETWORK_DISABLED 2>/dev/null || true
 
 ok() {
   echo "PASS: $1"
@@ -233,8 +233,9 @@ else
   ng "timeout in fail-open should return zero"
 fi
 
-# Test 7: sandbox env is detected and hard-fails with escalation hint
-if CODEX_SANDBOX_NETWORK_DISABLED=1 \
+# Test 7: active sandbox env is detected and hard-fails with escalation hint
+if CODEX_SANDBOX=seatbelt \
+  CODEX_SANDBOX_NETWORK_DISABLED=1 \
   GEMINI_SECOND_OPINION_CMD="$mock_ok" \
   "$SCRIPT" review-commit "q" < <(printf 'ctx') >/tmp/so_t7_out.txt 2>/tmp/so_t7_err.txt; then
   ng "sandbox detection should fail fast"
@@ -247,10 +248,23 @@ else
   fi
 fi
 
-# Test 8: deep type validation for risks[]
-if GEMINI_SECOND_OPINION_CMD="$mock_bad_type" \
+# Test 8: network-disabled env alone must not be treated as sandbox
+if CODEX_SANDBOX_NETWORK_DISABLED=1 \
+  GEMINI_SECOND_OPINION_CMD="$mock_ok" \
   "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t8_out.json 2>/tmp/so_t8_err.txt; then
-  if jq -e '.status=="fallback" and .reason=="invalid-json"' /tmp/so_t8_out.json >/dev/null; then
+  if jq -e '.status=="ok" and .opinion.recommendation=="do x"' /tmp/so_t8_out.json >/dev/null; then
+    ok "network-disabled env alone does not trigger sandbox detection"
+  else
+    ng "network-disabled-only payload mismatch"
+  fi
+else
+  ng "network-disabled env alone should not fail"
+fi
+
+# Test 9: deep type validation for risks[]
+if GEMINI_SECOND_OPINION_CMD="$mock_bad_type" \
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t9_out.json 2>/tmp/so_t9_err.txt; then
+  if jq -e '.status=="fallback" and .reason=="invalid-json"' /tmp/so_t9_out.json >/dev/null; then
     ok "deep type validation rejects non-string risks entries"
   else
     ng "deep type validation payload mismatch"
@@ -259,10 +273,10 @@ else
   ng "invalid-json in fail-open should still return zero"
 fi
 
-# Test 9: stream assistant text may include wrapper text; candidate extraction still recovers JSON
+# Test 10: stream assistant text may include wrapper text; candidate extraction still recovers JSON
 if GEMINI_SECOND_OPINION_CMD="$mock_log_json" \
-  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t9_out.json 2>/tmp/so_t9_err.txt; then
-  if jq -e '.status=="ok" and .opinion.recommendation=="do x"' /tmp/so_t9_out.json >/dev/null; then
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t10_out.json 2>/tmp/so_t10_err.txt; then
+  if jq -e '.status=="ok" and .opinion.recommendation=="do x"' /tmp/so_t10_out.json >/dev/null; then
     ok "stream text candidate extraction recovers wrapped JSON"
   else
     ng "stream text candidate extraction failed"
@@ -271,11 +285,11 @@ else
   ng "wrapped stream text should still parse"
 fi
 
-# Test 10: stream-json event output is reconstructed correctly
+# Test 11: stream-json event output is reconstructed correctly
 if GEMINI_SECOND_OPINION_CMD="$mock_stream" \
-  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t10_out.json 2>/tmp/so_t10_err.txt; then
-  if jq -e '.status=="ok" and .opinion.recommendation=="from stream" and .opinion.risks[0]=="r-stream"' /tmp/so_t10_out.json >/dev/null && \
-    grep -q '"type":"message"' /tmp/so_t10_err.txt; then
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t11_out.json 2>/tmp/so_t11_err.txt; then
+  if jq -e '.status=="ok" and .opinion.recommendation=="from stream" and .opinion.risks[0]=="r-stream"' /tmp/so_t11_out.json >/dev/null && \
+    grep -q '"type":"message"' /tmp/so_t11_err.txt; then
     ok "stream-json parsing reconstructs assistant output and mirrors events"
   else
     ng "stream-json reconstruction or stderr mirroring mismatch"
@@ -284,10 +298,10 @@ else
   ng "stream-json output should parse successfully"
 fi
 
-# Test 11: command stays headless and sends prompt via stdin
+# Test 12: command stays headless and sends prompt via stdin
 if GEMINI_SECOND_OPINION_CMD="$mock_check_args" \
-  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t11_out.json 2>/tmp/so_t11_err.txt; then
-  if jq -e '.status=="ok" and .opinion.recommendation=="do x"' /tmp/so_t11_out.json >/dev/null; then
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t12_out.json 2>/tmp/so_t12_err.txt; then
+  if jq -e '.status=="ok" and .opinion.recommendation=="do x"' /tmp/so_t12_out.json >/dev/null; then
     ok "command uses stdin prompt path in headless mode"
   else
     ng "stdin prompt path payload mismatch"
@@ -296,10 +310,10 @@ else
   ng "stdin prompt path should pass"
 fi
 
-# Test 12: raw-only output is rejected (no raw fallback path)
+# Test 13: raw-only output is rejected (no raw fallback path)
 if GEMINI_SECOND_OPINION_CMD="$mock_raw_only" \
-  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t12_out.json 2>/tmp/so_t12_err.txt; then
-  if jq -e '.status=="fallback" and .reason=="invalid-json"' /tmp/so_t12_out.json >/dev/null; then
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t13_out.json 2>/tmp/so_t13_err.txt; then
+  if jq -e '.status=="fallback" and .reason=="invalid-json"' /tmp/so_t13_out.json >/dev/null; then
     ok "raw-only output is rejected when stream events are missing"
   else
     ng "raw-only rejection payload mismatch"
@@ -308,13 +322,13 @@ else
   ng "raw-only invalid-json in fail-open should still return zero"
 fi
 
-# Test 13: timeout cleanup kills process group children
+# Test 14: timeout cleanup kills process group children
 child_pid_file="$(mktemp)"
 if GSO_CHILD_PID_FILE="$child_pid_file" \
   GEMINI_SECOND_OPINION_CMD="$mock_tree" \
   GEMINI_SECOND_OPINION_TIMEOUT_SEC=2 \
-  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t13_out.json 2>/tmp/so_t13_err.txt; then
-  if ! jq -e '.status=="fallback" and .reason=="gemini-timeout"' /tmp/so_t13_out.json >/dev/null; then
+  "$SCRIPT" review-commit "q" < <(printf 'ctx') > /tmp/so_t14_out.json 2>/tmp/so_t14_err.txt; then
+  if ! jq -e '.status=="fallback" and .reason=="gemini-timeout"' /tmp/so_t14_out.json >/dev/null; then
     ng "process-group cleanup timeout payload mismatch"
   elif [[ ! -s "$child_pid_file" ]]; then
     ng "process-group cleanup child pid file missing"
@@ -332,7 +346,7 @@ else
   ng "timeout cleanup probe should return zero in fail-open"
 fi
 
-# Test 14: docs reflect single-path workflow
+# Test 15: docs reflect single-path workflow
 if grep -q "^## Workflow$" "$SKILL_FILE" && \
   grep -q "second_opinion.sh" "$SKILL_FILE" && \
   grep -q "require_escalated" "$SKILL_FILE" && \
@@ -361,14 +375,14 @@ else
   ng "skill docs still contain removed subagent path"
 fi
 
-# Test 15: removed fallback async script
+# Test 16: removed fallback async script
 if [[ ! -e "$SCRIPT_DIR/parallel_review.sh" ]]; then
   ok "parallel_review.sh removed"
 else
   ng "parallel_review.sh should be removed"
 fi
 
-# Test 16: subagent wrapper removed
+# Test 17: subagent wrapper removed
 if [[ ! -e "$SCRIPT_DIR/subagent_second_opinion.sh" ]]; then
   ok "subagent_second_opinion.sh removed"
 else

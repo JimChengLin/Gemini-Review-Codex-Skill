@@ -241,8 +241,9 @@ if ! [[ "$max_context_bytes" =~ ^[0-9]+$ ]] || [[ "$max_context_bytes" == "0" ]]
   exit 66
 fi
 
-if [[ "${CODEX_SANDBOX_NETWORK_DISABLED+x}" == "x" ]]; then
-  echo "[gemini-second-opinion] sandbox detected via CODEX_SANDBOX_NETWORK_DISABLED; rerun this command with sandbox_permissions=\"require_escalated\"." >&2
+codex_sandbox_mode="${CODEX_SANDBOX:-}"
+if [[ -n "$codex_sandbox_mode" ]]; then
+  echo "[gemini-second-opinion] sandbox detected via CODEX_SANDBOX=${codex_sandbox_mode}; rerun this command with sandbox_permissions=\"require_escalated\"." >&2
   exit 77
 fi
 
