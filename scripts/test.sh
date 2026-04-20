@@ -204,6 +204,11 @@ if GEMINI_SECOND_OPINION_CMD="$mock_ok" \
   else
     ng "success payload invalid"
   fi
+  if grep -q 'waiting for Gemini response (timeout 600s)' /tmp/so_t5_err.txt; then
+    ok "default timeout is 10 minutes"
+  else
+    ng "default timeout should be 10 minutes"
+  fi
 else
   ng "success path should return zero"
 fi

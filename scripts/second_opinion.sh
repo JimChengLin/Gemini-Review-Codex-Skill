@@ -222,7 +222,7 @@ model_override="${GEMINI_SECOND_OPINION_MODEL:-}"
 model="${model_override:-auto}"
 gemini_cmd="${GEMINI_SECOND_OPINION_CMD:-gemini}"
 failure_mode="${GEMINI_SECOND_OPINION_FAILURE_MODE:-fail-open}"
-timeout_sec="${GEMINI_SECOND_OPINION_TIMEOUT_SEC:-300}"
+timeout_sec="${GEMINI_SECOND_OPINION_TIMEOUT_SEC:-600}"
 max_context_bytes="${GEMINI_SECOND_OPINION_MAX_CONTEXT_BYTES:-300000}"
 approval_mode="${GEMINI_SECOND_OPINION_APPROVAL_MODE:-default}"
 

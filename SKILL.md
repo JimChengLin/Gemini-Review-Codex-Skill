@@ -68,7 +68,7 @@ Use these fixed starters to reduce ambiguity:
 
 Execution controls (all optional):
 
-- `GEMINI_SECOND_OPINION_TIMEOUT_SEC` (default `300`)
+- `GEMINI_SECOND_OPINION_TIMEOUT_SEC` (default `600`)
 - `GEMINI_SECOND_OPINION_MODEL` (default `auto`)
 - Advanced vars: see `scripts/second_opinion.sh`.
 
